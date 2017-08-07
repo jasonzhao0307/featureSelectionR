@@ -1,0 +1,71 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+```{r}
+require(FeatureSelection)
+
+
+# one bug is: we need to remove all special characters in feature names before running the code
+# save the name to a vector or a dictionary, map back after running the code!
+
+
+RemoveSpecialChar <- function(string){
+  return(gsub("[][!#$%()*,.:;<=>@^_-`|~.{}]", "", string))
+}
+
+
+data(agaricus.train, package='xgboost')
+data(agaricus.test, package='xgboost')
+train <- agaricus.train
+test <- agaricus.test
+
+X_train <- as.data.frame(as.matrix(train[[1]]))
+colnames(X_train) <- RemoveSpecialChar(colnames(X_train))
+y_train <- train[[2]]
+
+
+
+
+params_glmnet = list(alpha = 1, family = 'binomial', nfolds = 5, parallel = TRUE)
+
+params_xgboost = list( params = list("objective" = "binary:logistic", "bst:eta" = 0.001, 
+                                     "subsample" = 0.75, "max_depth" = 5, "colsample_bytree" = 0.75, 
+                                     "nthread" = 6),nrounds = 1000, print.every.n = 250, maximize = FALSE)
+
+params_ranger = list(dependent.variable.name = 'y', probability = FALSE, num.trees = 1000, verbose = TRUE,
+                     mtry = 5, min.node.size = 10, num.threads = 6, classification = TRUE, 
+                     importance = 'permutation')
+
+params_features = list(keep_number_feat = NULL, union = TRUE)
+
+feat = wrapper_feat_select(X = X_train, y = y_train, params_glmnet = params_glmnet, 
+                           params_xgboost = params_xgboost, params_ranger = params_ranger, 
+                           xgb_sort = 'Gain', CV_folds = 5, stratified_regr = FALSE,
+                           scale_coefs_glmnet = FALSE, cores_glmnet = 5, 
+                           params_features = params_features, verbose = TRUE)
+
+
+str(feat)
+
+params_barplot = list(keep_features = 20, horiz = TRUE, cex.names = 1.0)
+barplot_feat_select(feat, params_barplot)
+```
+
+
+
+### Learn XGBoost
+
+```{r}
+dtrain <- xgb.DMatrix(data = train$data, label = train$label)
+bst <- xgboost(data = dtrain, max.depth = 2, eta = 1, nthread = 6, nround = 20, objective = "binary:logistic", verbose = 1)
+
+importance_matrix <- xgb.importance(model = bst)
+print(importance_matrix)
+xgb.plot.importance(importance_matrix = importance_matrix)
+
+
+```
+
